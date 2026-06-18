@@ -17,3 +17,4 @@ import "./get-workflow-details";
 import "./get-tool-details";
 import "./search-tools-by-name";
 import "./get-tool-panel";
+import "./get-tool-citations";

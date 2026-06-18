@@ -15,8 +15,6 @@ const PANEL = [
     elems: [
       // immediate match: name contains "fastqc"
       { id: "fastqc_tool", name: "FastQC", description: "Quality control for FASTQ" },
-      // extensions-only match: neither name nor description matches "bam"
-      { id: "bamtools_filter", name: "BamTools Filter", description: "Filter BAM records" },
       // _label id: must be skipped
       { id: "genomics_label", name: "Genomics Label", description: "" },
     ],
@@ -32,8 +30,8 @@ const PANEL = [
         name: "Inner",
         model_class: "ToolSection",
         elems: [
-          // no name/description match for "bam" but has "bam" extension
-          { id: "samtools_view", name: "SAMtools View", description: "Convert SAM/BAM" },
+          // extensions-only match: neither name nor description contains "bam"
+          { id: "samtools_view", name: "SAMtools View", description: "Convert alignment files" },
         ],
       },
     ],
@@ -73,12 +71,14 @@ describe("search_tools_by_keywords", () => {
   });
 
   it("matches extensions-only tools via detail fetch", async () => {
+    let detailFetchCount = 0;
     const client = mockClient({
       GET: (path, init) => {
         if (path === "/api/tools" && init?.params?.query?.in_panel === true) {
           return { data: PANEL, response: { status: 200 } };
         }
-        // tool detail: samtools_view has bam extension input
+        // tool detail fetch -- samtools_view has bam extension input, nothing else does
+        detailFetchCount++;
         const toolId = init?.params?.path?.tool_id;
         if (toolId === "samtools_view") {
           return {
@@ -89,14 +89,15 @@ describe("search_tools_by_keywords", () => {
             response: { status: 200 },
           };
         }
-        // others have no matching extensions
         return { data: { id: toolId, inputs: [] }, response: { status: 200 } };
       },
     });
     const out = await searchToolsByKeywords({ keywords: ["bam"] }, ctxWith(client));
     const ids = out.map((t) => t.id);
-    // bamtools_filter matches by description ("BAM"), samtools_view matches by extension
+    // samtools_view has no "bam" in name or description -- it must match via extension detail fetch
     expect(ids).toContain("samtools_view");
+    // assert the detail endpoint was actually called (extensions branch is exercised)
+    expect(detailFetchCount).toBeGreaterThan(0);
   });
 
   it("returns slim objects with id/name/description/versions", async () => {

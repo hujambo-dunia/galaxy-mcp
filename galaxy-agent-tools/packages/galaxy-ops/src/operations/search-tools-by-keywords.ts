@@ -69,6 +69,8 @@ async function run(i: In, ctx: GalaxyContext): Promise<ToolKeywordMatch[]> {
     params: { query: { in_panel: true } },
   });
 
+  // Pre-filter _label ids before the immediate/detail split -- intentional deviation from the
+  // Python source, which checks _label only in the detail path. Labels should never surface as results.
   const allTools = flattenTools(panel).filter((t) => t.id && !t.id.endsWith("_label"));
 
   const needles = i.keywords.map((k) => k.toLowerCase());

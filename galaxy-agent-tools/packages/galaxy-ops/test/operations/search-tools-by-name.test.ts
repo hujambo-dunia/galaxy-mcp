@@ -9,6 +9,8 @@ const ctxWith = (client: any): GalaxyContext => ({ client, poll: DEFAULT_POLL })
 const TOOLS = [
   { id: "fastqc_tool", name: "FastQC", description: "Quality control" },
   { id: "trimmomatic", name: "Trimmomatic", description: "Trimming reads" },
+  // id-only match fixture: name/description intentionally contain no part of the id
+  { id: "toolxyz_internal_id", name: "Read Processor", description: "Processes sequencing reads" },
   { id: "cat1", name: "Concatenate", description: "Join files together" },
 ];
 
@@ -30,8 +32,12 @@ describe("search_tools_by_name", () => {
     const client = mockClient({
       GET: () => ({ data: TOOLS, response: { status: 200 } }),
     });
-    const out = await searchToolsByName({ query: "trimmomatic" }, ctxWith(client));
-    expect(out.map((t) => t.id)).toContain("trimmomatic");
+    // "toolxyz_internal_id" contains "toolxyz" -- the name ("Read Processor") and
+    // description ("Processes sequencing reads") have no substring match, so this
+    // exercises the id-only branch exclusively
+    const out = await searchToolsByName({ query: "toolxyz" }, ctxWith(client));
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe("toolxyz_internal_id");
   });
 
   it("matches against description (case-insensitive)", async () => {

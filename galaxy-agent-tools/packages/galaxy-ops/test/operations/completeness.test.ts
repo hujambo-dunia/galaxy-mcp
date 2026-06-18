@@ -13,6 +13,7 @@ const EXPECTED = [
   "search_tools_by_keywords",
   "get_job_details",
   "update_history",
+  "cancel_workflow_invocation",
 ];
 
 describe("registry completeness", () => {

@@ -26,3 +26,4 @@ export { getToolRunExamplesOp, getToolRunExamples, type ToolRunExamples } from "
 export { searchToolsByKeywordsOp, searchToolsByKeywords, type ToolKeywordMatch } from "./operations/search-tools-by-keywords";
 export { getJobDetailsOp, getJobDetails, type GetJobDetailsResult, type JobDetail } from "./operations/get-job-details";
 export { updateHistoryOp, updateHistory, type UpdatedHistory } from "./operations/update-history";
+export { cancelWorkflowInvocationOp, cancelWorkflowInvocation, type CancelledInvocation } from "./operations/cancel-workflow-invocation";

@@ -15,3 +15,4 @@ import "./get-history-contents";
 import "./list-workflows";
 import "./get-workflow-details";
 import "./get-tool-details";
+import "./search-tools-by-name";

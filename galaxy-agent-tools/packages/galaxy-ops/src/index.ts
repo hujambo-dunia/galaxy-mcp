@@ -22,3 +22,4 @@ export { getToolDetailsOp, getToolDetails, type ToolDetail } from "./operations/
 export { searchToolsByNameOp, searchToolsByName, type ToolListItem } from "./operations/search-tools-by-name";
 export { getToolPanelOp, getToolPanel, type ToolPanel } from "./operations/get-tool-panel";
 export { getToolCitationsOp, getToolCitations, type ToolCitationsResult } from "./operations/get-tool-citations";
+export { getToolRunExamplesOp, getToolRunExamples, type ToolRunExamples } from "./operations/get-tool-run-examples";

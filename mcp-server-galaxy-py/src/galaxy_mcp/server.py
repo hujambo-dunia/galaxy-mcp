@@ -411,6 +411,14 @@ vetted Interactive Workflow Composer (IWC) workflow, then
 
 User-defined tools (created via `create_user_tool`) are run with
 `run_user_tool`, not `run_tool` -- they use a different Galaxy endpoint.
+
+Pages are Galaxy-flavored markdown documents: a history-attached page is a
+"Notebook", a standalone page a "Report". Manage them with `list_pages`,
+`get_page`, `create_page`, and `update_page`; inspect edit history via
+`list_page_revisions` / `get_page_revision` / `revert_page_revision`. Page
+content embeds datasets through directives that use ENCODED ids (e.g.
+`history_dataset_display(history_dataset_id=f2db41e1fa331b3e)`), which you get
+from `get_history_contents` / `get_dataset_details`.
 """
 
 _CODE_MODE_INSTRUCTIONS = """\

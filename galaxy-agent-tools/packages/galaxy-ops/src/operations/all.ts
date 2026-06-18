@@ -21,3 +21,4 @@ import "./get-tool-citations";
 import "./get-tool-run-examples";
 import "./search-tools-by-keywords";
 import "./get-job-details";
+import "./update-history";

@@ -12,6 +12,7 @@ const EXPECTED = [
   "search_tools_by_name", "get_tool_panel", "get_tool_citations", "get_tool_run_examples",
   "search_tools_by_keywords",
   "get_job_details",
+  "update_history",
 ];
 
 describe("registry completeness", () => {

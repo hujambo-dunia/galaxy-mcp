@@ -12,6 +12,7 @@ from galaxy_mcp.server import (
     cancel_workflow_invocation,
     connect,
     create_history,
+    create_page,
     create_user_tool,
     delete_user_tool,
     download_dataset,
@@ -26,6 +27,8 @@ from galaxy_mcp.server import (
     get_iwc_workflow_details,
     get_iwc_workflows,
     get_job_details,
+    get_page,
+    get_page_revision,
     get_server_info,
     get_tool_citations,
     get_tool_details,
@@ -38,15 +41,19 @@ from galaxy_mcp.server import (
     import_workflow_from_iwc,
     invoke_workflow,
     list_history_ids,
+    list_page_revisions,
+    list_pages,
     list_user_tools,
     list_workflows,
     recommend_iwc_workflows,
+    revert_page_revision,
     run_tool,
     run_user_tool,
     search_iwc_workflows,
     search_tools_by_keywords,
     search_tools_by_name,
     update_history,
+    update_page,
     upload_file,
     upload_file_from_url,
 )
@@ -86,8 +93,14 @@ get_workflow_input_template_fn = get_function(get_workflow_input_template)
 import_workflow_from_iwc_fn = get_function(import_workflow_from_iwc)
 invoke_workflow_fn = get_function(invoke_workflow)
 list_history_ids_fn = get_function(list_history_ids)
+list_page_revisions_fn = get_function(list_page_revisions)
+list_pages_fn = get_function(list_pages)
 list_workflows_fn = get_function(list_workflows)
+create_page_fn = get_function(create_page)
+get_page_fn = get_function(get_page)
+get_page_revision_fn = get_function(get_page_revision)
 recommend_iwc_workflows_fn = get_function(recommend_iwc_workflows)
+revert_page_revision_fn = get_function(revert_page_revision)
 run_tool_fn = get_function(run_tool)
 create_user_tool_fn = get_function(create_user_tool)
 delete_user_tool_fn = get_function(delete_user_tool)
@@ -96,6 +109,7 @@ run_user_tool_fn = get_function(run_user_tool)
 search_iwc_workflows_fn = get_function(search_iwc_workflows)
 search_tools_fn = get_function(search_tools_by_name)
 update_history_fn = get_function(update_history)
+update_page_fn = get_function(update_page)
 upload_file_fn = get_function(upload_file)
 upload_file_from_url_fn = get_function(upload_file_from_url)
 
@@ -129,8 +143,14 @@ __all__ = [
     "import_workflow_from_iwc_fn",
     "invoke_workflow_fn",
     "list_history_ids_fn",
+    "list_page_revisions_fn",
+    "list_pages_fn",
     "list_workflows_fn",
+    "create_page_fn",
+    "get_page_fn",
+    "get_page_revision_fn",
     "recommend_iwc_workflows_fn",
+    "revert_page_revision_fn",
     "run_tool_fn",
     "create_user_tool_fn",
     "delete_user_tool_fn",
@@ -139,6 +159,7 @@ __all__ = [
     "search_iwc_workflows_fn",
     "search_tools_fn",
     "update_history_fn",
+    "update_page_fn",
     "upload_file_fn",
     "upload_file_from_url_fn",
     "galaxy_state",

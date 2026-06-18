@@ -9,7 +9,17 @@ def test_every_tool_is_tagged():
     """Every registered tool should have one domain, access, and tier tag."""
     from galaxy_mcp.server import mcp
 
-    domains = {"connection", "histories", "datasets", "jobs", "tools", "workflows", "iwc", "user"}
+    domains = {
+        "connection",
+        "histories",
+        "datasets",
+        "jobs",
+        "tools",
+        "workflows",
+        "iwc",
+        "user",
+        "pages",
+    }
     access = {"read", "write"}
     tiers = {"core", "extended", "niche"}
 

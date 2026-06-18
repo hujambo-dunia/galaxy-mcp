@@ -20,3 +20,4 @@ export { listWorkflowsOp, listWorkflows, type Workflows } from "./operations/lis
 export { getWorkflowDetailsOp, getWorkflowDetails, type WorkflowDetail } from "./operations/get-workflow-details";
 export { getToolDetailsOp, getToolDetails, type ToolDetail } from "./operations/get-tool-details";
 export { searchToolsByNameOp, searchToolsByName, type ToolListItem } from "./operations/search-tools-by-name";
+export { getToolPanelOp, getToolPanel, type ToolPanel } from "./operations/get-tool-panel";

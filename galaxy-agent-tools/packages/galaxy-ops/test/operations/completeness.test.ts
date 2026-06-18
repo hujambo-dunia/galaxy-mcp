@@ -9,7 +9,7 @@ const EXPECTED = [
   "get_server_info", "get_histories", "list_history_ids", "get_history_details",
   "create_history", "get_dataset_details", "get_collection_details", "get_history_contents",
   "list_workflows", "get_workflow_details", "get_tool_details",
-  "search_tools_by_name",
+  "search_tools_by_name", "get_tool_panel",
 ];
 
 describe("registry completeness", () => {

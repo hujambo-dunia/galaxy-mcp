@@ -27,3 +27,4 @@ export { searchToolsByKeywordsOp, searchToolsByKeywords, type ToolKeywordMatch }
 export { getJobDetailsOp, getJobDetails, type GetJobDetailsResult, type JobDetail } from "./operations/get-job-details";
 export { updateHistoryOp, updateHistory, type UpdatedHistory } from "./operations/update-history";
 export { cancelWorkflowInvocationOp, cancelWorkflowInvocation, type CancelledInvocation } from "./operations/cancel-workflow-invocation";
+export { downloadDatasetOp, downloadDataset, type DownloadDatasetResult } from "./operations/download-dataset";

@@ -14,6 +14,7 @@ const EXPECTED = [
   "get_job_details",
   "update_history",
   "cancel_workflow_invocation",
+  "download_dataset",
 ];
 
 describe("registry completeness", () => {

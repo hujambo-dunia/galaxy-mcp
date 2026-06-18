@@ -1,0 +1,64 @@
+import { describe, it, expect } from "vitest";
+import { downloadDatasetOp, downloadDataset } from "../../src/operations/download-dataset";
+import { mockClient } from "../util/mock-client";
+import { DEFAULT_POLL } from "../../src/context";
+import type { GalaxyContext } from "../../src/context";
+
+// filePath branch (writes to disk) is deferred to integration tests.
+
+const ctxWith = (client: any): GalaxyContext => ({ client, poll: DEFAULT_POLL });
+
+describe("download_dataset", () => {
+  it("(a) state ok, no filePath: returns content in memory", async () => {
+    const client = mockClient({
+      GET: (path, _init) => {
+        if (path.includes("/display")) {
+          return {
+            data: new Uint8Array([1, 2, 3]).buffer,
+            response: { status: 200 },
+          };
+        }
+        // metadata GET
+        return {
+          data: { id: "d1", name: "my-data", file_ext: "txt", state: "ok", genome_build: "hg19", file_size: 100 },
+          response: { status: 200 },
+        };
+      },
+    });
+    const out = await downloadDataset({ datasetId: "d1" }, ctxWith(client));
+    expect(out.content_available).toBe(true);
+    expect(out.suggested_filename).toBe("my-data.txt");
+    expect(out.file_size).toBe(3);
+    expect(out.dataset_info.state).toBe("ok");
+    expect(out.dataset_id).toBe("d1");
+  });
+
+  it("(b) state running -> throws with 'not ready' message", async () => {
+    const client = mockClient({
+      GET: (_path, _init) => {
+        return {
+          data: { id: "d2", name: "my-data", file_ext: "txt", state: "running", genome_build: "hg19", file_size: 0 },
+          response: { status: 200 },
+        };
+      },
+    });
+    await expect(downloadDataset({ datasetId: "d2" }, ctxWith(client))).rejects.toThrow(/not ready/);
+  });
+
+  it("requireOkState=false bypasses state check", async () => {
+    const client = mockClient({
+      GET: (path, _init) => {
+        if (path.includes("/display")) {
+          return { data: new Uint8Array([5, 6]).buffer, response: { status: 200 } };
+        }
+        return {
+          data: { id: "d3", name: "my-data", file_ext: "txt", state: "running", genome_build: null, file_size: 50 },
+          response: { status: 200 },
+        };
+      },
+    });
+    const out = await downloadDataset({ datasetId: "d3", requireOkState: false }, ctxWith(client));
+    expect(out.content_available).toBe(true);
+    expect(out.file_size).toBe(2);
+  });
+});

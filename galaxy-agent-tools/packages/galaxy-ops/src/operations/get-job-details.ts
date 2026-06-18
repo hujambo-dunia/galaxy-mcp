@@ -1,5 +1,6 @@
+// Note: /api/histories/{history_id}/contents/{dataset_id}/provenance is not in the typed API paths.
+// The provenance GET call casts ctx.client.GET to `any` -- intentional, localized to this file.
 import { z } from "zod";
-import type { GetJson } from "../bindings";
 import type { GalaxyContext } from "../context";
 import { classifyHttp } from "../errors";
 import { register } from "./registry";
@@ -38,9 +39,9 @@ type In = { datasetId: string; historyId?: string };
 async function run(i: In, ctx: GalaxyContext): Promise<GetJobDetailsResult> {
   let jobId: string | undefined;
 
-  // Try provenance path if historyId supplied
+  // Try provenance path if historyId supplied (cast to any: path not in typed API)
   if (i.historyId) {
-    const { data, error, response } = await ctx.client.GET(
+    const { data, error, response } = await (ctx.client.GET as any)(
       "/api/histories/{history_id}/contents/{dataset_id}/provenance",
       { params: { path: { history_id: i.historyId, dataset_id: i.datasetId } } },
     );

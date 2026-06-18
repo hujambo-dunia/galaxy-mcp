@@ -20,7 +20,7 @@ describe("buildProgram", () => {
     const names = program.commands.map((c) => c.name());
     expect(names).toContain("get_histories");
     expect(names).toContain("create_history");
-    expect(names.length).toBe(19);
+    expect(names.length).toBe(23);
   });
 
   it("runs an op and renders json to stdout", async () => {

@@ -5,12 +5,19 @@ export function toolNames(): string[] {
   return allOperations.map((op) => op.name);
 }
 
-/** Per-tool MCP annotations derived from the op's readOnly hint (default read-only). */
+/** MCP annotations for a single op: read-only by default, destructive only when flagged. */
+export function annotationsFor(op: { readOnly?: boolean; destructive?: boolean }): {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+} {
+  return { readOnlyHint: op.readOnly !== false, destructiveHint: op.destructive === true };
+}
+
+/** Per-tool MCP annotations derived from each op's readOnly/destructive hints. */
 export function toolAnnotations(): Record<string, { readOnlyHint: boolean; destructiveHint: boolean }> {
   const out: Record<string, { readOnlyHint: boolean; destructiveHint: boolean }> = {};
   for (const op of allOperations) {
-    const readOnly = op.readOnly !== false;
-    out[op.name] = { readOnlyHint: readOnly, destructiveHint: false };
+    out[op.name] = annotationsFor(op);
   }
   return out;
 }

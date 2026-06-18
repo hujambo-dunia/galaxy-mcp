@@ -19,3 +19,4 @@ import "./search-tools-by-name";
 import "./get-tool-panel";
 import "./get-tool-citations";
 import "./get-tool-run-examples";
+import "./search-tools-by-keywords";

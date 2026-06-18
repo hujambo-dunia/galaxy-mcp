@@ -23,3 +23,4 @@ export { searchToolsByNameOp, searchToolsByName, type ToolListItem } from "./ope
 export { getToolPanelOp, getToolPanel, type ToolPanel } from "./operations/get-tool-panel";
 export { getToolCitationsOp, getToolCitations, type ToolCitationsResult } from "./operations/get-tool-citations";
 export { getToolRunExamplesOp, getToolRunExamples, type ToolRunExamples } from "./operations/get-tool-run-examples";
+export { searchToolsByKeywordsOp, searchToolsByKeywords, type ToolKeywordMatch } from "./operations/search-tools-by-keywords";

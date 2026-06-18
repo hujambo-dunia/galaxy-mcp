@@ -20,3 +20,4 @@ import "./get-tool-panel";
 import "./get-tool-citations";
 import "./get-tool-run-examples";
 import "./search-tools-by-keywords";
+import "./get-job-details";

@@ -30,4 +30,5 @@ export { cancelWorkflowInvocationOp, cancelWorkflowInvocation, type CancelledInv
 export { downloadDatasetOp, downloadDataset, type DownloadDatasetResult } from "./operations/download-dataset";
 export { getIwcWorkflowsOp, getIwcWorkflows } from "./operations/get-iwc-workflows";
 export { getIwcWorkflowDetailsOp, getIwcWorkflowDetails, type IwcWorkflowDetail } from "./operations/get-iwc-workflow-details";
+export { searchIwcWorkflowsOp, searchIwcWorkflows } from "./operations/search-iwc-workflows";
 export type { IwcWorkflow, EnrichedIwcWorkflow } from "./iwc-manifest";

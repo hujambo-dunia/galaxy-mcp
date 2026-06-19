@@ -411,6 +411,14 @@ vetted Interactive Workflow Composer (IWC) workflow, then
 
 User-defined tools (created via `create_user_tool`) are run with
 `run_user_tool`, not `run_tool` -- they use a different Galaxy endpoint.
+
+Pages are Galaxy-flavored markdown documents: a history-attached page is a
+"Notebook", a standalone page a "Report". Manage them with `list_pages`,
+`get_page`, `create_page`, and `update_page`; inspect edit history via
+`list_page_revisions` / `get_page_revision` / `revert_page_revision`. Page
+content embeds datasets through directives that use ENCODED ids (e.g.
+`history_dataset_display(history_dataset_id=f2db41e1fa331b3e)`), which you get
+from `get_history_contents` / `get_dataset_details`.
 """
 
 _CODE_MODE_INSTRUCTIONS = """\
@@ -3376,6 +3384,369 @@ def run_user_tool(history_id: str, tool_uuid: str, inputs: dict[str, Any]) -> Ga
             ) from e
         raise ValueError(
             format_error("Run user tool", e, {"history_id": history_id, "tool_uuid": tool_uuid})
+        ) from e
+
+
+# ==================== Pages (notebooks and reports) ====================
+#
+# A Galaxy "Page" is the notebook/report. A page attached to a history is a
+# "Notebook"; a standalone page is a "Report". Content is Galaxy-flavored
+# markdown with directives referencing ENCODED ids (e.g.
+# history_dataset_display(history_dataset_id=f2db41e1fa331b3e)). bioblend hands
+# back encoded ids already, so -- unlike the in-Galaxy MCP -- there is no
+# encode/decode dance: content_editor is read, edited, and POSTed back as-is.
+
+
+def _strip_rendered(page: dict[str, Any], include_rendered: bool) -> dict[str, Any]:
+    """Drop the large expanded-render ``content``, keeping editable ``content_editor``.
+
+    Mirrors the in-Galaxy MCP behavior: callers edit and POST back
+    content_editor; the rendered content is only worth its size when explicitly
+    requested.
+    """
+    if not include_rendered:
+        page.pop("content", None)
+    return page
+
+
+@mcp.tool(tags={"pages", "read", "extended"})
+def list_pages(
+    history_id: str | None = None,
+    search: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    show_published: bool = False,
+    show_shared: bool = False,
+) -> GalaxyResult:
+    """List Galaxy pages (markdown documents) viewable by the user.
+
+    A page attached to a history is a "Galaxy Notebook"; a standalone page is
+    a "Report". Pass history_id to list only that history's notebooks.
+
+    Args:
+        history_id: Encoded history id. When set, returns only notebooks
+            attached to that history.
+        search: Freetext filter over title/content.
+        limit: Max pages to return (default 100).
+        offset: Pagination offset.
+        show_published: Also include pages published by other users (default False).
+        show_shared: Also include pages shared with the user (default False).
+
+    Returns:
+        GalaxyResult with the page summaries (encoded id, title, history_id,
+        latest_revision_id) in data, count, and pagination whose total_items is
+        the server's total_matches.
+
+    NEXT STEPS:
+    - Read one: get_page(page_id)
+    - Create a notebook: create_page(history_id=...)
+    """
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
+
+    try:
+        # REST index defaults (show_own and show_published both True) are wrong
+        # for an agent, so set every visibility flag explicitly.
+        params: dict[str, Any] = {
+            "limit": limit,
+            "offset": offset,
+            "show_own": "true",
+            "show_published": str(show_published).lower(),
+            "show_shared": str(show_shared).lower(),
+        }
+        if history_id is not None:
+            params["history_id"] = history_id
+        if search is not None:
+            params["search"] = search
+
+        response = gi.make_get_request(f"{gi.url}/api/pages", params=params)
+        response.raise_for_status()
+        pages = response.json()
+        # total_matches is a response header, not part of the JSON body.
+        total_matches = int(response.headers.get("total_matches", len(pages)))
+
+        has_next = (offset + len(pages)) < total_matches
+        has_previous = offset > 0
+        pagination = PaginationInfo(
+            total_items=total_matches,
+            returned_items=len(pages),
+            limit=limit,
+            offset=offset,
+            has_next=has_next,
+            has_previous=has_previous,
+            next_offset=offset + limit if has_next else None,
+            previous_offset=max(0, offset - limit) if has_previous else None,
+        )
+
+        return GalaxyResult(
+            data=pages,
+            count=len(pages),
+            pagination=pagination,
+            success=True,
+            message=f"Retrieved {len(pages)} pages",
+        )
+    except Exception as e:
+        raise ValueError(format_error("List pages", e, {"history_id": history_id})) from e
+
+
+@mcp.tool(tags={"pages", "read", "extended"})
+def get_page(page_id: str, include_rendered: bool = False) -> GalaxyResult:
+    """Get a page and the content of its latest revision.
+
+    Returns `content_editor`: the editable Galaxy-flavored markdown, with
+    ENCODED ids in directives (e.g. `history_dataset_id=f2db41e1fa331b3e`).
+    This is the form to edit and pass back to update_page.
+
+    Args:
+        page_id: Encoded id of the page (from list_pages / create_page).
+        include_rendered: When True, also return `content` -- the
+            embed-expanded render form (inlined dataset previews). Can be
+            large; omit unless you need the rendered output.
+
+    Returns:
+        GalaxyResult with page details including `content_editor`, metadata, and
+        `edit_source` of the latest revision in data.
+
+    NEXT STEPS:
+    - Edit it: update_page(page_id, content=...)
+    - See history: list_page_revisions(page_id)
+    """
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
+
+    try:
+        response = gi.make_get_request(f"{gi.url}/api/pages/{page_id}")
+        response.raise_for_status()
+        page = _strip_rendered(response.json(), include_rendered)
+        return GalaxyResult(
+            data=page,
+            success=True,
+            message=f"Retrieved page '{page_id}'",
+        )
+    except Exception as e:
+        raise ValueError(format_error("Get page", e, {"page_id": page_id})) from e
+
+
+@mcp.tool(tags={"pages", "write", "extended"})
+def create_page(
+    history_id: str | None = None,
+    title: str | None = None,
+    content: str | None = None,
+    annotation: str | None = None,
+    slug: str | None = None,
+) -> GalaxyResult:
+    """Create a markdown page (Galaxy Notebook or Report).
+
+    Pass history_id to create a history-attached notebook (title auto-fills
+    from the history if omitted). Omit history_id to create a standalone
+    report -- reports REQUIRE both a title and a unique slug
+    (lowercase/digits/hyphens).
+
+    Content is Galaxy-flavored markdown. To embed a dataset, use a directive
+    with the ENCODED dataset id, e.g.
+    `history_dataset_display(history_dataset_id=f2db41e1fa331b3e)` or
+    `history_dataset_collection_display(history_dataset_collection_id=...)`.
+    Get encoded ids from get_history_contents / get_dataset_details.
+
+    Args:
+        history_id: Encoded history id to attach the page to (notebook).
+        title: Page title.
+        content: Initial markdown content.
+        annotation: Optional annotation attached to the page.
+        slug: URL slug (required for standalone reports).
+
+    Returns:
+        GalaxyResult with the created page details including encoded id and
+        content_editor in data.
+
+    NEXT STEPS:
+    - Edit it: update_page(page_id, content=...)
+    """
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
+
+    try:
+        # REST defaults content_format to html; the page tools speak markdown.
+        payload: dict[str, Any] = {"content_format": "markdown"}
+        if history_id is not None:
+            payload["history_id"] = history_id
+        if title is not None:
+            payload["title"] = title
+        if content is not None:
+            payload["content"] = content
+        if annotation is not None:
+            payload["annotation"] = annotation
+        if slug is not None:
+            payload["slug"] = slug
+
+        page = _strip_rendered(
+            gi.make_post_request(f"{gi.url}/api/pages", payload=payload),
+            include_rendered=False,
+        )
+        return GalaxyResult(
+            data=page,
+            success=True,
+            message=f"Created page '{page.get('id', '')}'",
+        )
+    except Exception as e:
+        raise ValueError(format_error("Create page", e, {"history_id": history_id})) from e
+
+
+@mcp.tool(tags={"pages", "write", "extended"})
+def update_page(
+    page_id: str,
+    content: str | None = None,
+    title: str | None = None,
+) -> GalaxyResult:
+    """Update a page, creating a new revision when content changes.
+
+    Content is Galaxy-flavored markdown using ENCODED ids in directives
+    (e.g. `history_dataset_id=f2db41e1fa331b3e`) -- never raw integer ids or
+    HIDs. Get encoded ids from get_history_contents / get_dataset_details.
+    Edits made through this tool are recorded with edit_source="agent". This does
+    not change the page's content_format, so editing a page originally authored
+    as HTML with markdown content can mislabel it.
+
+    Args:
+        page_id: Encoded id of the page.
+        content: New markdown content. Omit to leave content unchanged.
+        title: New title. Omit to leave unchanged.
+
+    Returns:
+        GalaxyResult with the updated page details including content_editor in data.
+
+    NEXT STEPS:
+    - Inspect revisions: list_page_revisions(page_id)
+    - Roll back: revert_page_revision(page_id, revision_id)
+    """
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
+
+    try:
+        # edit_source attributes the revision to the agent, not a human user.
+        payload: dict[str, Any] = {"edit_source": "agent"}
+        if content is not None:
+            payload["content"] = content
+        if title is not None:
+            payload["title"] = title
+
+        page = _strip_rendered(
+            gi.make_put_request(f"{gi.url}/api/pages/{page_id}", payload=payload),
+            include_rendered=False,
+        )
+        return GalaxyResult(
+            data=page,
+            success=True,
+            message=f"Updated page '{page_id}'",
+        )
+    except Exception as e:
+        raise ValueError(format_error("Update page", e, {"page_id": page_id})) from e
+
+
+@mcp.tool(tags={"pages", "read", "extended"})
+def list_page_revisions(page_id: str, sort_desc: bool = False) -> GalaxyResult:
+    """List the revision history of a page.
+
+    Each revision carries an `edit_source` ("user", "agent", or "restore")
+    recording who made the edit.
+
+    Args:
+        page_id: Encoded id of the page.
+        sort_desc: Newest-first when True (default oldest-first).
+
+    Returns:
+        GalaxyResult with the revisions (encoded id, page_id, edit_source,
+        timestamps) in data and count.
+
+    NEXT STEPS:
+    - Read a revision: get_page_revision(page_id, revision_id)
+    - Roll back: revert_page_revision(page_id, revision_id)
+    """
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
+
+    try:
+        response = gi.make_get_request(
+            f"{gi.url}/api/pages/{page_id}/revisions",
+            params={"sort_desc": str(sort_desc).lower()},
+        )
+        response.raise_for_status()
+        revisions = response.json()
+        return GalaxyResult(
+            data=revisions,
+            count=len(revisions),
+            success=True,
+            message=f"Retrieved {len(revisions)} revisions for page '{page_id}'",
+        )
+    except Exception as e:
+        raise ValueError(format_error("List page revisions", e, {"page_id": page_id})) from e
+
+
+@mcp.tool(tags={"pages", "read", "extended"})
+def get_page_revision(page_id: str, revision_id: str) -> GalaxyResult:
+    """Get the content of a single page revision.
+
+    Returns the revision's `content`: the editable Galaxy-flavored markdown with
+    ENCODED ids in directives -- the form to diff against get_page or pass back
+    to update_page. Note: a revision exposes its editable markdown as `content`;
+    revisions have no separate `content_editor` field (unlike get_page).
+
+    Args:
+        page_id: Encoded id of the page.
+        revision_id: Encoded id of the revision (from list_page_revisions).
+
+    Returns:
+        GalaxyResult with the revision details including `content`, `edit_source`,
+        and timestamps in data.
+    """
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
+
+    try:
+        response = gi.make_get_request(f"{gi.url}/api/pages/{page_id}/revisions/{revision_id}")
+        response.raise_for_status()
+        return GalaxyResult(
+            data=response.json(),
+            success=True,
+            message=f"Retrieved revision '{revision_id}' of page '{page_id}'",
+        )
+    except Exception as e:
+        raise ValueError(
+            format_error("Get page revision", e, {"page_id": page_id, "revision_id": revision_id})
+        ) from e
+
+
+@mcp.tool(tags={"pages", "write", "extended"})
+def revert_page_revision(page_id: str, revision_id: str) -> GalaxyResult:
+    """Roll a page back to an earlier revision.
+
+    Creates a NEW revision from the target revision's content, recorded with
+    edit_source="restore" (the history is append-only -- nothing is deleted).
+
+    Args:
+        page_id: Encoded id of the page.
+        revision_id: Encoded id of the revision to restore.
+
+    Returns:
+        GalaxyResult with the new restored revision's details in data.
+    """
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
+
+    try:
+        revision = gi.make_post_request(
+            f"{gi.url}/api/pages/{page_id}/revisions/{revision_id}/revert"
+        )
+        return GalaxyResult(
+            data=revision,
+            success=True,
+            message=f"Reverted page '{page_id}' to revision '{revision_id}'",
+        )
+    except Exception as e:
+        raise ValueError(
+            format_error(
+                "Revert page revision", e, {"page_id": page_id, "revision_id": revision_id}
+            )
         ) from e
 
 

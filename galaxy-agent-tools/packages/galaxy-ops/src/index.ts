@@ -28,3 +28,5 @@ export { getJobDetailsOp, getJobDetails, type GetJobDetailsResult, type JobDetai
 export { updateHistoryOp, updateHistory, type UpdatedHistory } from "./operations/update-history";
 export { cancelWorkflowInvocationOp, cancelWorkflowInvocation, type CancelledInvocation } from "./operations/cancel-workflow-invocation";
 export { downloadDatasetOp, downloadDataset, type DownloadDatasetResult } from "./operations/download-dataset";
+export { getIwcWorkflowsOp, getIwcWorkflows } from "./operations/get-iwc-workflows";
+export type { IwcWorkflow, EnrichedIwcWorkflow } from "./iwc-manifest";

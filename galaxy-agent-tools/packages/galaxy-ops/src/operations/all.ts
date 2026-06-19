@@ -24,3 +24,4 @@ import "./get-job-details";
 import "./update-history";
 import "./cancel-workflow-invocation";
 import "./download-dataset";
+import "./get-iwc-workflows";

@@ -15,6 +15,7 @@ const EXPECTED = [
   "update_history",
   "cancel_workflow_invocation",
   "download_dataset",
+  "get_iwc_workflows",
 ];
 
 describe("registry completeness", () => {

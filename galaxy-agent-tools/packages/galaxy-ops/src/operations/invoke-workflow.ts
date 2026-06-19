@@ -180,7 +180,8 @@ async function run(i: In, ctx: GalaxyContext): Promise<InvocationResult> {
     }
   }
 
-  // Build the POST body. Use the typed path since it's in the bindings.
+  // Build the POST body. Mirror only the fields Python/bioblend sends -- omitting
+  // null-defaulted optional fields avoids accidentally overriding server defaults.
   // `history` carries "hist_id=<id>" when historyId is supplied, else the name, else omitted.
   const historyField = i.historyId
     ? `hist_id=${i.historyId}`
@@ -189,19 +190,10 @@ async function run(i: In, ctx: GalaxyContext): Promise<InvocationResult> {
       : undefined;
 
   const body: Record<string, unknown> = {
-    inputs: i.inputs ?? null,
+    inputs: i.inputs ?? {},
     inputs_by: i.inputsBy ?? "step_index",
-    parameters: i.params ?? null,
+    parameters: i.params ?? {},
     parameters_normalized: i.parametersNormalized ?? false,
-    instance: false,
-    // Required-by-schema fields with null defaults
-    allow_tool_state_corrections: null,
-    batch: null,
-    ds_map: null,
-    legacy: null,
-    no_add_to_history: null,
-    require_exact_tool_versions: null,
-    use_cached_job: null,
   };
   if (historyField != null) body["history"] = historyField;
 

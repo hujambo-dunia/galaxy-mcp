@@ -195,6 +195,120 @@ describe("invoke_workflow op", () => {
     expect(msg.message).not.toContain("invocation");
   });
 
+  // (e) HDCA enrichment -- collection show GET fires, enriched metadata drives validation
+  describe("HDCA enrichment integration", () => {
+    /** Workflow with a collection input slot (list:fastq). */
+    const COLLECTION_WORKFLOW = {
+      steps: {
+        "0": {
+          step_type: "data_collection_input",
+          step_index: 0,
+          step_label: "Input collection",
+          uuid: "uuid-coll",
+          inputs: [
+            {
+              extensions: ["fastq"],
+              acceptable_extensions: ["fastq", "fastq.gz"],
+              optional: false,
+              collection_type: "list",
+            },
+          ],
+        },
+      },
+    };
+
+    function buildHdcaClient({
+      collectionType = "list",
+      elementExtensions = ["fastq"],
+      postSpy,
+      hdcaGetSpy,
+    }: {
+      collectionType?: string;
+      elementExtensions?: string[];
+      postSpy?: (path: string, init?: any) => void;
+      hdcaGetSpy?: (path: string, init?: any) => void;
+    } = {}) {
+      return mockClient({
+        GET: (path: string, init?: any) => {
+          if (path === "/api/workflows/{workflow_id}/download") {
+            return { data: COLLECTION_WORKFLOW, response: { status: 200 } };
+          }
+          if (path === "/api/datatypes/types_and_mapping") {
+            return { data: DATATYPES_COMBINED, response: { status: 200 } };
+          }
+          if (path === "/api/dataset_collections/{hdca_id}") {
+            hdcaGetSpy?.(path, init);
+            const elements = elementExtensions.map((ext) => ({ object: { extension: ext } }));
+            return {
+              data: { collection_type: collectionType, elements },
+              response: { status: 200 },
+            };
+          }
+          return { error: "unexpected GET", response: { status: 500 } };
+        },
+        POST: (path: string, init?: any) => {
+          postSpy?.(path, init);
+          if (path === "/api/workflows/{workflow_id}/invocations") {
+            return { data: INVOCATION_RESPONSE, response: { status: 200 } };
+          }
+          return { error: "unexpected POST", response: { status: 500 } };
+        },
+      });
+    }
+
+    it("fires the collection show GET via legacyGet path-param substitution", async () => {
+      let hdcaGetPath: string | undefined;
+      let hdcaGetInit: any;
+      const client = buildHdcaClient({
+        collectionType: "list",
+        elementExtensions: ["fastq"],
+        hdcaGetSpy: (path, init) => {
+          hdcaGetPath = path;
+          hdcaGetInit = init;
+        },
+      });
+      await invokeWorkflow(
+        { workflowId: "wf1", inputs: { "0": { src: "hdca", id: "coll1" } } },
+        ctxWith(client),
+      );
+      expect(hdcaGetPath).toBe("/api/dataset_collections/{hdca_id}");
+      expect(hdcaGetInit?.params?.path?.hdca_id).toBe("coll1");
+    });
+
+    it("type-mismatched collection (wrong collection_type) -> throws, no POST", async () => {
+      let postCalled = false;
+      // Slot expects collection_type "list"; supply "paired" to trigger a mismatch.
+      // We also give a non-list collection_type in the enriched response so validation
+      // can detect it via the collection_type field.
+      const client = buildHdcaClient({
+        collectionType: "paired",
+        elementExtensions: ["fastq"],
+        postSpy: () => { postCalled = true; },
+      });
+      await expect(
+        invokeWorkflow(
+          { workflowId: "wf1", inputs: { "0": { src: "hdca", id: "coll_bad" } } },
+          ctxWith(client),
+        ),
+      ).rejects.toBeInstanceOf(GalaxyConnectionError);
+      expect(postCalled).toBe(false);
+    });
+
+    it("compatible collection (matching collection_type) -> POST proceeds", async () => {
+      let postCalled = false;
+      const client = buildHdcaClient({
+        collectionType: "list",
+        elementExtensions: ["fastq"],
+        postSpy: () => { postCalled = true; },
+      });
+      await invokeWorkflow(
+        { workflowId: "wf1", inputs: { "0": { src: "hdca", id: "coll_good" } } },
+        ctxWith(client),
+      );
+      expect(postCalled).toBe(true);
+    });
+  });
+
   it("preflight failure (slot resolve error) falls through to invoke, not abort", async () => {
     // If the slot resolution throws, we still POST
     let postCalled = false;

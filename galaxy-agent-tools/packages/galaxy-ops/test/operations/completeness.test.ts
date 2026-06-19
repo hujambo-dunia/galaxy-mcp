@@ -22,6 +22,7 @@ const EXPECTED = [
   "import_workflow_from_iwc",
   "list_user_tools",
   "create_user_tool",
+  "delete_user_tool",
 ];
 
 describe("registry completeness", () => {

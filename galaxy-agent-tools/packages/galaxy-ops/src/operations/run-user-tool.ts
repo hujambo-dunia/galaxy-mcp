@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { GalaxyContext } from "../context";
+import { GalaxyNotFoundError } from "../errors";
 import { legacyGet, legacyPost } from "../legacy";
 import { register } from "./registry";
 import type { AnyOperation, Operation } from "./types";
@@ -32,6 +33,10 @@ async function run(i: In, ctx: GalaxyContext): Promise<UserToolRun> {
   const toolInfo = await legacyGet<ToolLookup>(ctx, "/api/unprivileged_tools/{tool_uuid}", {
     params: { path: { tool_uuid: i.toolUuid } },
   });
+
+  if (!toolInfo.tool_id) {
+    throw new GalaxyNotFoundError(`No user-defined tool found with UUID '${i.toolUuid}'`);
+  }
 
   const toolVersion = toolInfo.representation?.version ?? "0.1.0";
 

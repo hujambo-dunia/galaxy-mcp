@@ -36,6 +36,21 @@ describe("create_user_tool", () => {
     expect(postCalled).toBe(false);
   });
 
+  it("throws without making a POST when shell_command is missing (non-first required field)", async () => {
+    let postCalled = false;
+    const client = mockClient({
+      POST: () => {
+        postCalled = true;
+        return { data: {}, response: { status: 200 } };
+      },
+    });
+    const { shell_command: _sc, ...noShellCommand } = VALID_REP;
+    await expect(
+      createUserTool({ representation: noShellCommand }, ctxWith(client)),
+    ).rejects.toThrow("shell_command");
+    expect(postCalled).toBe(false);
+  });
+
   it("throws when class is not GalaxyUserTool (no POST fired)", async () => {
     let postCalled = false;
     const client = mockClient({

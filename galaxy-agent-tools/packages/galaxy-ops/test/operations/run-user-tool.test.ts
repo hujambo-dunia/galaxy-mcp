@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { runUserToolOp, runUserTool } from "../../src/operations/run-user-tool";
+import { GalaxyNotFoundError } from "../../src/errors";
 import { mockClient } from "../util/mock-client";
 import { DEFAULT_POLL } from "../../src/context";
 import type { GalaxyContext } from "../../src/context";
@@ -85,6 +86,24 @@ describe("run_user_tool", () => {
     expect(
       runUserToolOp.project!(result, { historyId: HISTORY_ID, toolUuid: TOOL_UUID, inputs: {} }),
     ).toEqual({ message: `Submitted user tool ${TOOL_UUID} to history ${HISTORY_ID}` });
+  });
+
+  it("throws GalaxyNotFoundError when lookup returns 200 without tool_id (no POST fired)", async () => {
+    let postCalled = false;
+    const client = mockClient({
+      GET: () => ({
+        data: { representation: { version: "1.0" } },
+        response: { status: 200 },
+      }),
+      POST: () => {
+        postCalled = true;
+        return { data: {}, response: { status: 200 } };
+      },
+    });
+    await expect(
+      runUserTool({ historyId: HISTORY_ID, toolUuid: TOOL_UUID, inputs: {} }, ctxWith(client)),
+    ).rejects.toBeInstanceOf(GalaxyNotFoundError);
+    expect(postCalled).toBe(false);
   });
 
   it("throws when GET fails", async () => {

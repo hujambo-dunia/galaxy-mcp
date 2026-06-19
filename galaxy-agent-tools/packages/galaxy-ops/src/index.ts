@@ -38,4 +38,6 @@ export { createUserToolOp, createUserTool, type CreatedUserTool } from "./operat
 export { deleteUserToolOp, deleteUserTool, type DeletedUserTool } from "./operations/delete-user-tool";
 export { runUserToolOp, runUserTool, type UserToolRun } from "./operations/run-user-tool";
 export { getToolInputTemplateOp, getToolInputTemplate, type ToolInputTemplateResult } from "./operations/get-tool-input-template";
+export { getWorkflowInputTemplateOp, getWorkflowInputTemplate, resolveWorkflowSlots, type ResolvedSlots } from "./operations/get-workflow-input-template";
+export type { WorkflowInputTemplate, WorkflowSlot, WorkflowGuide } from "./workflow-inputs";
 export type { IwcWorkflow, EnrichedIwcWorkflow } from "./iwc-manifest";

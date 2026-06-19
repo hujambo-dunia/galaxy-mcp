@@ -421,6 +421,7 @@ export interface WorkflowGuide {
     };
   };
   notes?: string[];
+  [k: string]: unknown;
 }
 
 /**

@@ -15,6 +15,7 @@ describe("MCP surface is a mechanical projection", () => {
     expect(ann.get_histories?.readOnlyHint).toBe(true);
     expect(ann.create_history?.readOnlyHint).toBe(false);
     expect(ann.create_history?.destructiveHint).toBe(false);
+    expect(ann.run_tool?.readOnlyHint).toBe(false); // executes a tool
   });
 
   it("derives per-op annotations from readOnly/destructive hints", () => {

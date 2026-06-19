@@ -37,3 +37,4 @@ import "./get-tool-input-template";
 import "./get-workflow-input-template";
 import "./invoke-workflow";
 import "./upload-file";
+import "./upload-file-from-url";

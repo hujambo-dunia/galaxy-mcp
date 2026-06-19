@@ -28,6 +28,7 @@ const EXPECTED = [
   "get_workflow_input_template",
   "invoke_workflow",
   "upload_file",
+  "upload_file_from_url",
 ];
 
 describe("registry completeness", () => {

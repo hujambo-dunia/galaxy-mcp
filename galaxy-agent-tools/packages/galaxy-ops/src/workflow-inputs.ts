@@ -1,10 +1,10 @@
 /**
- * Pure helpers for workflow input templates.
+ * Pure helpers for workflow input templates and invoke-time validation.
  *
  * No HTTP, no context, no side effects -- all functions take plain parsed JSON
  * so they are trivially unit-testable. The I/O wiring (fetching style=run / .ga /
  * show_workflow via a Galaxy client, op registration) lives in
- * operations/get-workflow-input-template.ts.
+ * operations/get-workflow-input-template.ts and operations/invoke-workflow.ts.
  *
  * Faithful port of Python workflow_inputs.py.
  */
@@ -487,4 +487,206 @@ export function buildGuide(
     ];
   }
   return guide;
+}
+
+// ---------------------------------------------------------------------------
+// Datatype validation helpers (for invoke-time preflight)
+// ---------------------------------------------------------------------------
+
+/**
+ * The datatypes class mapping returned by GET /api/datatypes/types_and_mapping.
+ * This is the inner `datatypes_mapping` object (not the outer `DatatypesCombinedMap`).
+ */
+export interface DatatypesMapping {
+  ext_to_class_name: Record<string, string>;
+  class_to_classes: Record<string, Record<string, boolean>>;
+  [k: string]: unknown;
+}
+
+/**
+ * True if a dataset of `suppliedExt` is acceptable where `acceptedExts` are required.
+ *
+ * `acceptedExts === []` means the slot accepts any datatype. Uses Galaxy's
+ * datatype class hierarchy: supplied satisfies accepted if some accepted
+ * extension's class is in the supplied extension's class ancestry (so `bed`
+ * satisfies `tabular`). Unknown supplied/accepted extensions are treated
+ * permissively -- we only reject a *provable* mismatch.
+ *
+ * Faithful port of Python `subtype_satisfies`.
+ */
+export function subtypeSatisfies(
+  suppliedExt: string,
+  acceptedExts: string[],
+  mapping: DatatypesMapping,
+): boolean {
+  if (!acceptedExts.length) return true;
+  const extToClass = mapping.ext_to_class_name ?? {};
+  const classToClasses = mapping.class_to_classes ?? {};
+  const suppliedClass = extToClass[suppliedExt];
+  if (suppliedClass == null) return true; // unknown ext -> permissive
+  const ancestry = classToClasses[suppliedClass] ?? {};
+  for (const accepted of acceptedExts) {
+    const acceptedClass = extToClass[accepted];
+    if (acceptedClass == null) return true; // unknown accepted ext -> permissive
+    if (acceptedClass === suppliedClass || ancestry[acceptedClass]) return true;
+  }
+  return false;
+}
+
+/** Direct or map-over collection type compatibility. null/undefined required == accept any shape. */
+function collectionTypeCompatible(
+  supplied: string | null | undefined,
+  required: string | null | undefined,
+): boolean {
+  if (!required || !supplied) return true;
+  if (supplied === required) return true;
+  // map-over: a list:paired collection can feed a 'paired' (or 'list:paired') slot
+  return supplied.split(":").at(-1) === required || supplied.endsWith(":" + required);
+}
+
+function extAccepted(suppliedExt: string, slot: WorkflowSlot, mapping: DatatypesMapping): boolean {
+  const acc = (slot.acceptable_extensions as string[]) ?? [];
+  if (acc.length) return acc.includes(suppliedExt);
+  return subtypeSatisfies(suppliedExt, slot.accepted_formats as string[], mapping);
+}
+
+// ---------------------------------------------------------------------------
+// validateInputs
+// ---------------------------------------------------------------------------
+
+export interface ValidationReport {
+  rejects: Array<{ step_index: number; label: string; reason: string }>;
+  warnings: Array<{ step_index?: number | string; message: string }>;
+}
+
+/**
+ * Three-tier preflight. `supplied` keyed by str(step_index); data entries
+ * carry `ext`; collection entries carry `collection_type` and optional
+ * `element_extensions`; parameter entries are scalars. Rejects are provable
+ * structural/datatype mismatches; warnings are inferred/uncertain.
+ *
+ * Faithful port of Python `validate_inputs`.
+ */
+export function validateInputs(
+  slots: WorkflowSlot[],
+  supplied: Record<string, unknown>,
+  mapping: DatatypesMapping,
+): ValidationReport {
+  const rejects: ValidationReport["rejects"] = [];
+  const warnings: ValidationReport["warnings"] = [];
+
+  // Detect duplicate step_index values
+  const seen = new Set<string>();
+  for (const s of slots) {
+    const idx = String(s.step_index);
+    if (seen.has(idx)) {
+      warnings.push({
+        step_index: idx,
+        message: `Workflow has multiple input slots sharing step_index ${idx}; only one will be validated.`,
+      });
+    }
+    seen.add(idx);
+  }
+
+  const byIndex = new Map(slots.map((s) => [String(s.step_index), s]));
+
+  for (const [key, value] of Object.entries(supplied)) {
+    const slot = byIndex.get(String(key));
+    if (slot == null) {
+      warnings.push({
+        step_index: key,
+        message: `Supplied input for step ${key} has no matching workflow input slot.`,
+      });
+      continue;
+    }
+
+    const itype = slot.input_type;
+    const isRef =
+      typeof value === "object" && value !== null && "src" in (value as Record<string, unknown>);
+
+    if (itype === "parameter") {
+      if (isRef) {
+        rejects.push({
+          step_index: slot.step_index,
+          label: slot.label,
+          reason: "Parameter input given a dataset/collection reference; expected a scalar value.",
+        });
+      }
+      continue;
+    }
+
+    if (!isRef) {
+      rejects.push({
+        step_index: slot.step_index,
+        label: slot.label,
+        reason: `${itype} input expects a {'src','id'} reference.`,
+      });
+      continue;
+    }
+
+    const ref = value as Record<string, unknown>;
+
+    if (itype === "data") {
+      if (ref["src"] !== "hda") {
+        rejects.push({
+          step_index: slot.step_index,
+          label: slot.label,
+          reason: `Slot expects a single dataset (hda); got a collection (${ref["src"]}).`,
+        });
+        continue;
+      }
+      const ext = ref["ext"] as string | undefined;
+      if (ext && !extAccepted(ext, slot, mapping)) {
+        rejects.push({
+          step_index: slot.step_index,
+          label: slot.label,
+          reason: `Dataset datatype '${ext}' is not accepted here (expects: ${(slot.accepted_formats as string[]).join(", ")}).`,
+        });
+      } else if (!ext && (slot.accepted_formats as unknown[]).length) {
+        warnings.push({
+          step_index: slot.step_index,
+          message: `Could not determine datatype of the dataset for '${slot.label}'; slot expects ${(slot.accepted_formats as string[]).join(", ")}.`,
+        });
+      }
+    } else if (itype === "data_collection") {
+      if (ref["src"] !== "hdca") {
+        rejects.push({
+          step_index: slot.step_index,
+          label: slot.label,
+          reason: `Slot expects a dataset collection (hdca); got ${ref["src"]}.`,
+        });
+        continue;
+      }
+      if (!collectionTypeCompatible(ref["collection_type"] as string | undefined, slot.collection_type as string | undefined)) {
+        rejects.push({
+          step_index: slot.step_index,
+          label: slot.label,
+          reason: `Collection type '${ref["collection_type"]}' is incompatible with the slot's '${slot.collection_type}'.`,
+        });
+        continue;
+      }
+      for (const elExt of (ref["element_extensions"] as string[] | undefined) ?? []) {
+        if (!extAccepted(elExt, slot, mapping)) {
+          rejects.push({
+            step_index: slot.step_index,
+            label: slot.label,
+            reason: `Collection element datatype '${elExt}' is not accepted here (expects: ${(slot.accepted_formats as string[]).join(", ")}).`,
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  // Warn on missing required slots (don't block -- model may add them next call)
+  for (const slot of slots) {
+    if (!slot.optional && !(String(slot.step_index) in supplied)) {
+      warnings.push({
+        step_index: slot.step_index,
+        message: `Required input '${slot.label}' (step ${slot.step_index}) not supplied yet.`,
+      });
+    }
+  }
+
+  return { rejects, warnings };
 }

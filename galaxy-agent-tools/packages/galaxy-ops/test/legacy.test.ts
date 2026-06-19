@@ -66,4 +66,11 @@ describe("legacyDelete", () => {
       GalaxyNotFoundError,
     );
   });
+
+  it("treats a 204 No Content (null body) as success, not an error", async () => {
+    const noContent = mockClient({ DELETE: () => ({ data: undefined, response: { status: 204 } }) });
+    await expect(
+      legacyDelete(ctxWith(noContent), "/api/unprivileged_tools/{uuid}", {}),
+    ).resolves.toBeUndefined();
+  });
 });

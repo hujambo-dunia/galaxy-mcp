@@ -31,6 +31,7 @@ export async function legacyPost<T>(ctx: GalaxyContext, path: string, init?: unk
 export async function legacyDelete<T>(ctx: GalaxyContext, path: string, init?: unknown): Promise<T> {
   const del = ctx.client.DELETE as unknown as Verb;
   const { data, error, response } = await del(path, init);
-  if (error || data == null) throw classifyHttp(response.status, error);
+  // DELETE may answer 204 No Content -- a null body on a 2xx is success, not an error.
+  if (error) throw classifyHttp(response.status, error);
   return data as T;
 }

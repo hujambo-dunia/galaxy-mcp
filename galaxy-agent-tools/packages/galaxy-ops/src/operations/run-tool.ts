@@ -36,6 +36,7 @@ export const runToolOp: Operation<typeof input, ToolRun> = {
     "Run a Galaxy tool via the typed tool-request path and wait until it reaches terminal state. " +
     "Inputs are nested (no flat pipe-keys); success is derived from the spawned jobs.",
   input,
+  readOnly: false, // executes a tool -- not a read
   run,
   project: (o) => ({ message: `Tool run ${o.toolRequestId} completed (${o.jobs.length} job(s), state=${o.state})` }),
 };

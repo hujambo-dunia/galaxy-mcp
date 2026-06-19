@@ -36,6 +36,8 @@ export interface Operation<Shape extends ZodRawShape, O> {
   readonly minGalaxyVersion?: string;
   /** Read-only by default. Write/mutating ops set this false (drives MCP annotations). */
   readonly readOnly?: boolean;
+  /** Destructive (delete/cancel) ops set this true (drives MCP destructiveHint). */
+  readonly destructive?: boolean;
   run(input: InputOf<Shape>, ctx: GalaxyContext): Promise<O>;
   project?(output: O, input: InputOf<Shape>): { message?: string; pagination?: Pagination };
 }

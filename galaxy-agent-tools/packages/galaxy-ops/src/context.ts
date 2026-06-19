@@ -19,6 +19,7 @@ export const DEFAULT_POLL: PollPolicy = {
 export interface GalaxyContext {
   readonly client: GalaxyClient;
   readonly baseUrl?: string;
+  readonly apiKey?: string;
   readonly serverVersion?: string;
   readonly poll: PollPolicy;
   readonly signal?: AbortSignal;
@@ -37,6 +38,7 @@ export function createGalaxyContext(opts: CreateContextOptions): GalaxyContext {
   return {
     client: createGalaxyClient(opts.baseUrl, opts.apiKey, opts.fetchImpl),
     baseUrl: opts.baseUrl,
+    apiKey: opts.apiKey,
     serverVersion: opts.serverVersion,
     poll: { ...DEFAULT_POLL, ...opts.poll },
     signal: opts.signal,

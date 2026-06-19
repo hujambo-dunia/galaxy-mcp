@@ -23,6 +23,7 @@ const EXPECTED = [
   "list_user_tools",
   "create_user_tool",
   "delete_user_tool",
+  "run_user_tool",
 ];
 
 describe("registry completeness", () => {

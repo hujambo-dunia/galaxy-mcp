@@ -36,4 +36,5 @@ export { importWorkflowFromIwcOp, importWorkflowFromIwc, type ImportedWorkflow }
 export { listUserToolsOp, listUserTools, type UserTool } from "./operations/list-user-tools";
 export { createUserToolOp, createUserTool, type CreatedUserTool } from "./operations/create-user-tool";
 export { deleteUserToolOp, deleteUserTool, type DeletedUserTool } from "./operations/delete-user-tool";
+export { runUserToolOp, runUserTool, type UserToolRun } from "./operations/run-user-tool";
 export type { IwcWorkflow, EnrichedIwcWorkflow } from "./iwc-manifest";

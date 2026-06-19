@@ -32,3 +32,4 @@ import "./import-workflow-from-iwc";
 import "./list-user-tools";
 import "./create-user-tool";
 import "./delete-user-tool";
+import "./run-user-tool";

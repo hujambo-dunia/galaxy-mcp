@@ -27,4 +27,5 @@ import "./download-dataset";
 import "./get-iwc-workflows";
 import "./get-iwc-workflow-details";
 import "./search-iwc-workflows";
+import "./recommend-iwc-workflows";
 import "./import-workflow-from-iwc";

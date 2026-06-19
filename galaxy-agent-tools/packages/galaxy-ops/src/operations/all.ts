@@ -30,3 +30,4 @@ import "./search-iwc-workflows";
 import "./recommend-iwc-workflows";
 import "./import-workflow-from-iwc";
 import "./list-user-tools";
+import "./create-user-tool";

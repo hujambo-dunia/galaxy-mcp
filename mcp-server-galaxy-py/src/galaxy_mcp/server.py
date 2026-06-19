@@ -3397,22 +3397,6 @@ def run_user_tool(history_id: str, tool_uuid: str, inputs: dict[str, Any]) -> Ga
 # encode/decode dance: content_editor is read, edited, and POSTed back as-is.
 
 
-def _pages_connection() -> tuple[str, str]:
-    """Return (base_url, api_key) for direct REST calls to Galaxy's /api/pages*.
-
-    bioblend exposes no Pages API, so the page tools call the REST layer
-    directly -- the same approach get_job_details uses. Talking to requests
-    (rather than a bioblend helper) also lets list_pages read the total_matches
-    response header.
-    """
-    state = ensure_connected()
-    base_url = state["url"] or normalized_galaxy_url or ""
-    api_key = state["api_key"]
-    if not base_url or not api_key:
-        raise ValueError("Galaxy connection is missing URL or API key information.")
-    return base_url, api_key
-
-
 def _strip_rendered(page: dict[str, Any], include_rendered: bool) -> dict[str, Any]:
     """Drop the large expanded-render ``content``, keeping editable ``content_editor``.
 
@@ -3457,7 +3441,8 @@ def list_pages(
     - Read one: get_page(page_id)
     - Create a notebook: create_page(history_id=...)
     """
-    base_url, api_key = _pages_connection()
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
 
     try:
         # REST index defaults (show_own and show_published both True) are wrong
@@ -3474,9 +3459,7 @@ def list_pages(
         if search is not None:
             params["search"] = search
 
-        response = requests.get(
-            f"{base_url}api/pages", headers={"x-api-key": api_key}, params=params, timeout=30
-        )
+        response = gi.make_get_request(f"{gi.url}/api/pages", params=params)
         response.raise_for_status()
         pages = response.json()
         # total_matches is a response header, not part of the JSON body.
@@ -3528,12 +3511,11 @@ def get_page(page_id: str, include_rendered: bool = False) -> GalaxyResult:
     - Edit it: update_page(page_id, content=...)
     - See history: list_page_revisions(page_id)
     """
-    base_url, api_key = _pages_connection()
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
 
     try:
-        response = requests.get(
-            f"{base_url}api/pages/{page_id}", headers={"x-api-key": api_key}, timeout=30
-        )
+        response = gi.make_get_request(f"{gi.url}/api/pages/{page_id}")
         response.raise_for_status()
         page = _strip_rendered(response.json(), include_rendered)
         return GalaxyResult(
@@ -3580,7 +3562,8 @@ def create_page(
     NEXT STEPS:
     - Edit it: update_page(page_id, content=...)
     """
-    base_url, api_key = _pages_connection()
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
 
     try:
         # REST defaults content_format to html; the page tools speak markdown.
@@ -3596,11 +3579,10 @@ def create_page(
         if slug is not None:
             payload["slug"] = slug
 
-        response = requests.post(
-            f"{base_url}api/pages", headers={"x-api-key": api_key}, json=payload, timeout=30
+        page = _strip_rendered(
+            gi.make_post_request(f"{gi.url}/api/pages", payload=payload),
+            include_rendered=False,
         )
-        response.raise_for_status()
-        page = _strip_rendered(response.json(), include_rendered=False)
         return GalaxyResult(
             data=page,
             success=True,
@@ -3621,7 +3603,9 @@ def update_page(
     Content is Galaxy-flavored markdown using ENCODED ids in directives
     (e.g. `history_dataset_id=f2db41e1fa331b3e`) -- never raw integer ids or
     HIDs. Get encoded ids from get_history_contents / get_dataset_details.
-    Edits made through this tool are recorded with edit_source="agent".
+    Edits made through this tool are recorded with edit_source="agent". This does
+    not change the page's content_format, so editing a page originally authored
+    as HTML with markdown content can mislabel it.
 
     Args:
         page_id: Encoded id of the page.
@@ -3635,7 +3619,8 @@ def update_page(
     - Inspect revisions: list_page_revisions(page_id)
     - Roll back: revert_page_revision(page_id, revision_id)
     """
-    base_url, api_key = _pages_connection()
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
 
     try:
         # edit_source attributes the revision to the agent, not a human user.
@@ -3645,14 +3630,10 @@ def update_page(
         if title is not None:
             payload["title"] = title
 
-        response = requests.put(
-            f"{base_url}api/pages/{page_id}",
-            headers={"x-api-key": api_key},
-            json=payload,
-            timeout=30,
+        page = _strip_rendered(
+            gi.make_put_request(f"{gi.url}/api/pages/{page_id}", payload=payload),
+            include_rendered=False,
         )
-        response.raise_for_status()
-        page = _strip_rendered(response.json(), include_rendered=False)
         return GalaxyResult(
             data=page,
             success=True,
@@ -3681,14 +3662,13 @@ def list_page_revisions(page_id: str, sort_desc: bool = False) -> GalaxyResult:
     - Read a revision: get_page_revision(page_id, revision_id)
     - Roll back: revert_page_revision(page_id, revision_id)
     """
-    base_url, api_key = _pages_connection()
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
 
     try:
-        response = requests.get(
-            f"{base_url}api/pages/{page_id}/revisions",
-            headers={"x-api-key": api_key},
+        response = gi.make_get_request(
+            f"{gi.url}/api/pages/{page_id}/revisions",
             params={"sort_desc": str(sort_desc).lower()},
-            timeout=30,
         )
         response.raise_for_status()
         revisions = response.json()
@@ -3703,37 +3683,30 @@ def list_page_revisions(page_id: str, sort_desc: bool = False) -> GalaxyResult:
 
 
 @mcp.tool(tags={"pages", "read", "extended"})
-def get_page_revision(
-    page_id: str, revision_id: str, include_rendered: bool = False
-) -> GalaxyResult:
+def get_page_revision(page_id: str, revision_id: str) -> GalaxyResult:
     """Get the content of a single page revision.
 
-    Mirrors get_page: returns `content_editor` (the editable Galaxy-flavored
-    markdown with ENCODED ids in directives) -- the form to compare against
-    get_page or pass back to update_page.
+    Returns the revision's `content`: the editable Galaxy-flavored markdown with
+    ENCODED ids in directives -- the form to diff against get_page or pass back
+    to update_page. Note: a revision exposes its editable markdown as `content`;
+    revisions have no separate `content_editor` field (unlike get_page).
 
     Args:
         page_id: Encoded id of the page.
         revision_id: Encoded id of the revision (from list_page_revisions).
-        include_rendered: When True, also return `content` -- the
-            embed-expanded render form. Can be large; omit unless needed.
 
     Returns:
-        GalaxyResult with the revision details including `content_editor`,
-        `edit_source`, and timestamps in data.
+        GalaxyResult with the revision details including `content`, `edit_source`,
+        and timestamps in data.
     """
-    base_url, api_key = _pages_connection()
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
 
     try:
-        response = requests.get(
-            f"{base_url}api/pages/{page_id}/revisions/{revision_id}",
-            headers={"x-api-key": api_key},
-            timeout=30,
-        )
+        response = gi.make_get_request(f"{gi.url}/api/pages/{page_id}/revisions/{revision_id}")
         response.raise_for_status()
-        revision = _strip_rendered(response.json(), include_rendered)
         return GalaxyResult(
-            data=revision,
+            data=response.json(),
             success=True,
             message=f"Retrieved revision '{revision_id}' of page '{page_id}'",
         )
@@ -3757,16 +3730,13 @@ def revert_page_revision(page_id: str, revision_id: str) -> GalaxyResult:
     Returns:
         GalaxyResult with the new restored revision's details in data.
     """
-    base_url, api_key = _pages_connection()
+    state = ensure_connected()
+    gi: GalaxyInstance = state["gi"]
 
     try:
-        response = requests.post(
-            f"{base_url}api/pages/{page_id}/revisions/{revision_id}/revert",
-            headers={"x-api-key": api_key},
-            timeout=30,
+        revision = gi.make_post_request(
+            f"{gi.url}/api/pages/{page_id}/revisions/{revision_id}/revert"
         )
-        response.raise_for_status()
-        revision = _strip_rendered(response.json(), include_rendered=False)
         return GalaxyResult(
             data=revision,
             success=True,

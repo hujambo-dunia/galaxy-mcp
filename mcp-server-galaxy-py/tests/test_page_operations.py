@@ -1,15 +1,15 @@
 """Tests for Galaxy Pages (notebook/report) operations.
 
-The page tools talk to Galaxy's /api/pages* REST endpoints directly (bioblend
-has no Pages API), so the HTTP layer is stubbed with the `responses` library --
-mirroring tests/test_job_operations.py.
+The page tools call Galaxy's /api/pages* REST endpoints through bioblend's
+thread-safe make_get_request / make_post_request / make_put_request helpers
+(which carry the configured User-Agent and the _gi_lock), so the tests mock
+those methods on the injected GalaxyInstance. make_get_request returns a
+requests.Response; make_post_request / make_put_request return decoded JSON.
 """
 
-import json
-from urllib.parse import parse_qs, urlparse
+from unittest.mock import Mock
 
 import pytest
-import responses
 
 from galaxy_mcp.server import galaxy_state
 from tests.test_helpers import (
@@ -22,31 +22,36 @@ from tests.test_helpers import (
     update_page_fn,
 )
 
-BASE_URL = "http://localhost:8080/"
+GALAXY_URL = "http://localhost:8080"
+
+
+def _get_response(json_data, headers=None):
+    """Fake requests.Response as returned by gi.make_get_request."""
+    resp = Mock()
+    resp.json.return_value = json_data
+    resp.headers = headers or {}
+    resp.raise_for_status.return_value = None
+    return resp
 
 
 class TestPageOperations:
     def setup_method(self):
+        self.gi = Mock()
+        self.gi.url = GALAXY_URL
         galaxy_state["connected"] = True
-        galaxy_state["gi"] = type("MockGI", (), {})()
-        galaxy_state["url"] = BASE_URL
-        galaxy_state["api_key"] = "test_key"
+        galaxy_state["gi"] = self.gi
 
     def teardown_method(self):
         galaxy_state["connected"] = False
         galaxy_state["gi"] = None
 
-    @responses.activate
     def test_list_pages(self):
-        responses.add(
-            responses.GET,
-            f"{BASE_URL}api/pages",
-            json=[
+        self.gi.make_get_request.return_value = _get_response(
+            [
                 {"id": "page1", "title": "Notebook 1", "history_id": "hist1"},
                 {"id": "page2", "title": "Report 2", "history_id": None},
             ],
             headers={"total_matches": "5"},
-            status=200,
         )
 
         result = list_pages_fn(limit=2, offset=0)
@@ -59,43 +64,48 @@ class TestPageOperations:
         assert result.pagination.total_items == 5
         assert result.pagination.has_next is True
 
+        args, kwargs = self.gi.make_get_request.call_args
+        assert args[0] == f"{GALAXY_URL}/api/pages"
         # REST index defaults (show_own/show_published) are wrong for an agent;
         # confirm we override them explicitly.
-        query = parse_qs(urlparse(responses.calls[0].request.url).query)
-        assert query["show_own"] == ["true"]
-        assert query["show_published"] == ["false"]
-        assert query["show_shared"] == ["false"]
+        params = kwargs["params"]
+        assert params["show_own"] == "true"
+        assert params["show_published"] == "false"
+        assert params["show_shared"] == "false"
+        assert params["limit"] == 2
 
-    @responses.activate
     def test_list_pages_history_filter(self):
-        responses.add(
-            responses.GET,
-            f"{BASE_URL}api/pages",
-            json=[{"id": "page1", "title": "Notebook 1", "history_id": "hist1"}],
+        self.gi.make_get_request.return_value = _get_response(
+            [{"id": "page1", "title": "Notebook 1", "history_id": "hist1"}],
             headers={"total_matches": "1"},
-            status=200,
         )
 
         result = list_pages_fn(history_id="hist1", show_published=True)
 
         assert result.count == 1
-        query = parse_qs(urlparse(responses.calls[0].request.url).query)
-        assert query["history_id"] == ["hist1"]
-        assert query["show_published"] == ["true"]
+        params = self.gi.make_get_request.call_args.kwargs["params"]
+        assert params["history_id"] == "hist1"
+        assert params["show_published"] == "true"
 
-    @responses.activate
+    def test_list_pages_total_matches_defaults_when_header_absent(self):
+        # Galaxy always sets the header, but the tool must not crash without it.
+        self.gi.make_get_request.return_value = _get_response([{"id": "page1"}, {"id": "page2"}])
+
+        result = list_pages_fn(limit=50)
+
+        assert result.count == 2
+        assert result.pagination.total_items == 2
+        assert result.pagination.has_next is False
+
     def test_get_page_strips_rendered_by_default(self):
-        responses.add(
-            responses.GET,
-            f"{BASE_URL}api/pages/page1",
-            json={
+        self.gi.make_get_request.return_value = _get_response(
+            {
                 "id": "page1",
                 "title": "Notebook 1",
                 "content": "<rendered html>",
                 "content_editor": "raw markdown",
                 "edit_source": "agent",
-            },
-            status=200,
+            }
         )
 
         result = get_page_fn("page1")
@@ -104,19 +114,16 @@ class TestPageOperations:
         assert result.data["content_editor"] == "raw markdown"
         # The large rendered form is dropped unless explicitly requested.
         assert "content" not in result.data
+        assert self.gi.make_get_request.call_args.args[0] == f"{GALAXY_URL}/api/pages/page1"
 
-    @responses.activate
     def test_get_page_include_rendered(self):
-        responses.add(
-            responses.GET,
-            f"{BASE_URL}api/pages/page1",
-            json={
+        self.gi.make_get_request.return_value = _get_response(
+            {
                 "id": "page1",
                 "title": "Notebook 1",
                 "content": "<rendered html>",
                 "content_editor": "raw markdown",
-            },
-            status=200,
+            }
         )
 
         result = get_page_fn("page1", include_rendered=True)
@@ -124,19 +131,13 @@ class TestPageOperations:
         assert result.data["content"] == "<rendered html>"
         assert result.data["content_editor"] == "raw markdown"
 
-    @responses.activate
     def test_create_notebook(self):
-        responses.add(
-            responses.POST,
-            f"{BASE_URL}api/pages",
-            json={
-                "id": "page1",
-                "title": "My History",
-                "content": "<rendered>",
-                "content_editor": "# notes",
-            },
-            status=200,
-        )
+        self.gi.make_post_request.return_value = {
+            "id": "page1",
+            "title": "My History",
+            "content": "<rendered>",
+            "content_editor": "# notes",
+        }
 
         result = create_page_fn(history_id="hist1", content="# notes")
 
@@ -145,73 +146,60 @@ class TestPageOperations:
         # create returns the editable form, not the rendered one
         assert "content" not in result.data
 
-        sent = json.loads(responses.calls[0].request.body)
-        assert sent["content_format"] == "markdown"
-        assert sent["history_id"] == "hist1"
-        assert sent["content"] == "# notes"
+        args, kwargs = self.gi.make_post_request.call_args
+        assert args[0] == f"{GALAXY_URL}/api/pages"
+        payload = kwargs["payload"]
+        assert payload["content_format"] == "markdown"
+        assert payload["history_id"] == "hist1"
+        assert payload["content"] == "# notes"
 
-    @responses.activate
     def test_create_report(self):
-        responses.add(
-            responses.POST,
-            f"{BASE_URL}api/pages",
-            json={"id": "page9", "title": "My Report", "content_editor": ""},
-            status=200,
-        )
+        self.gi.make_post_request.return_value = {
+            "id": "page9",
+            "title": "My Report",
+            "content_editor": "",
+        }
 
         result = create_page_fn(title="My Report", slug="my-report")
 
         assert result.data["id"] == "page9"
-        sent = json.loads(responses.calls[0].request.body)
-        assert sent["title"] == "My Report"
-        assert sent["slug"] == "my-report"
-        assert "history_id" not in sent
+        payload = self.gi.make_post_request.call_args.kwargs["payload"]
+        assert payload["title"] == "My Report"
+        assert payload["slug"] == "my-report"
+        assert "history_id" not in payload
 
-    @responses.activate
     def test_create_report_missing_slug_error(self):
-        # Standalone reports require a unique slug; Galaxy rejects the request.
-        responses.add(
-            responses.POST,
-            f"{BASE_URL}api/pages",
-            json={"err_msg": "Slug is required for standalone pages"},
-            status=400,
-        )
+        # Standalone reports require a unique slug; Galaxy rejects the request and
+        # bioblend's make_post_request raises on the non-200.
+        self.gi.make_post_request.side_effect = Exception("Unexpected HTTP status code: 400")
 
         with pytest.raises(ValueError, match="Create page failed"):
             create_page_fn(title="My Report")
 
-    @responses.activate
     def test_update_page_attributes_to_agent(self):
-        responses.add(
-            responses.PUT,
-            f"{BASE_URL}api/pages/page1",
-            json={
-                "id": "page1",
-                "title": "Notebook 1",
-                "content": "<rendered>",
-                "content_editor": "# updated",
-            },
-            status=200,
-        )
+        self.gi.make_put_request.return_value = {
+            "id": "page1",
+            "title": "Notebook 1",
+            "content": "<rendered>",
+            "content_editor": "# updated",
+        }
 
         result = update_page_fn("page1", content="# updated")
 
         assert result.success is True
         assert "content" not in result.data
-        sent = json.loads(responses.calls[0].request.body)
-        assert sent["edit_source"] == "agent"
-        assert sent["content"] == "# updated"
+        args, kwargs = self.gi.make_put_request.call_args
+        assert args[0] == f"{GALAXY_URL}/api/pages/page1"
+        payload = kwargs["payload"]
+        assert payload["edit_source"] == "agent"
+        assert payload["content"] == "# updated"
 
-    @responses.activate
     def test_list_page_revisions(self):
-        responses.add(
-            responses.GET,
-            f"{BASE_URL}api/pages/page1/revisions",
-            json=[
+        self.gi.make_get_request.return_value = _get_response(
+            [
                 {"id": "rev1", "page_id": "page1", "edit_source": "user"},
                 {"id": "rev2", "page_id": "page1", "edit_source": "agent"},
-            ],
-            status=200,
+            ]
         )
 
         result = list_page_revisions_fn("page1", sort_desc=True)
@@ -219,51 +207,51 @@ class TestPageOperations:
         assert result.success is True
         assert result.count == 2
         assert result.data[1]["edit_source"] == "agent"
-        query = parse_qs(urlparse(responses.calls[0].request.url).query)
-        assert query["sort_desc"] == ["true"]
+        args, kwargs = self.gi.make_get_request.call_args
+        assert args[0] == f"{GALAXY_URL}/api/pages/page1/revisions"
+        assert kwargs["params"]["sort_desc"] == "true"
 
-    @responses.activate
-    def test_get_page_revision_strips_rendered(self):
-        responses.add(
-            responses.GET,
-            f"{BASE_URL}api/pages/page1/revisions/rev1",
-            json={
+    def test_get_page_revision_returns_content(self):
+        # A revision's editable markdown lives in `content` (no content_editor),
+        # and unlike get_page it is NOT stripped.
+        self.gi.make_get_request.return_value = _get_response(
+            {
                 "id": "rev1",
                 "page_id": "page1",
-                "content": "<rendered>",
-                "content_editor": "raw md",
+                "content": "raw md",
                 "edit_source": "user",
-            },
-            status=200,
+            }
         )
 
         result = get_page_revision_fn("page1", "rev1")
 
         assert result.success is True
-        assert "content" not in result.data
+        assert result.data["content"] == "raw md"
         assert result.data["edit_source"] == "user"
-
-    @responses.activate
-    def test_revert_page_revision(self):
-        responses.add(
-            responses.POST,
-            f"{BASE_URL}api/pages/page1/revisions/rev1/revert",
-            json={
-                "id": "rev3",
-                "page_id": "page1",
-                "content": "<rendered>",
-                "content_editor": "restored md",
-                "edit_source": "restore",
-            },
-            status=200,
+        assert (
+            self.gi.make_get_request.call_args.args[0]
+            == f"{GALAXY_URL}/api/pages/page1/revisions/rev1"
         )
+
+    def test_revert_page_revision(self):
+        self.gi.make_post_request.return_value = {
+            "id": "rev3",
+            "page_id": "page1",
+            "content": "restored md",
+            "edit_source": "restore",
+        }
 
         result = revert_page_revision_fn("page1", "rev1")
 
         assert result.success is True
         assert result.data["id"] == "rev3"
         assert result.data["edit_source"] == "restore"
-        assert "content" not in result.data
+        # restored revision content is returned, not stripped
+        assert result.data["content"] == "restored md"
+        assert (
+            self.gi.make_post_request.call_args.args[0]
+            == f"{GALAXY_URL}/api/pages/page1/revisions/rev1/revert"
+        )
 
     def test_list_pages_not_connected(self):
         galaxy_state["connected"] = False

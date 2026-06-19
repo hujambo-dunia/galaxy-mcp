@@ -25,8 +25,10 @@ const ctxWith = (client: any): GalaxyContext => ({
 describe("upload_file", () => {
   let capturedBody: unknown;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     capturedBody = undefined;
+    const { tusUploadFile } = await import("../../src/tus-upload");
+    vi.mocked(tusUploadFile).mockClear();
   });
 
   it("(a) posts correct Fetch API body shape", async () => {
@@ -70,7 +72,6 @@ describe("upload_file", () => {
 
     const { tusUploadFile } = await import("../../src/tus-upload");
     const tusMock = vi.mocked(tusUploadFile);
-    const callsBefore = tusMock.mock.calls.length;
 
     const client = mockClient({
       POST: () => ({ data: {}, response: { status: 200 } }),
@@ -78,7 +79,21 @@ describe("upload_file", () => {
     await expect(uploadFile({ path: "/nonexistent/file.txt" }, ctxWith(client))).rejects.toThrow(
       /file not found/,
     );
-    expect(tusMock.mock.calls.length).toBe(callsBefore); // tus not called
+    expect(tusMock).not.toHaveBeenCalled();
+  });
+
+  it("(e) throws GalaxyConnectionError when apiKey is missing without calling tus", async () => {
+    const { tusUploadFile } = await import("../../src/tus-upload");
+    const tusMock = vi.mocked(tusUploadFile);
+
+    const client = mockClient({
+      POST: () => ({ data: {}, response: { status: 200 } }),
+    });
+    const ctxNoKey: GalaxyContext = { client, poll: DEFAULT_POLL, baseUrl: "https://galaxy.example" };
+    await expect(uploadFile({ path: "/tmp/reads.fastq.gz" }, ctxNoKey)).rejects.toThrow(
+      /baseUrl and apiKey are required for file upload/,
+    );
+    expect(tusMock).not.toHaveBeenCalled();
   });
 
   it("(d) project() includes basename and job count", () => {

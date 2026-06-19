@@ -31,10 +31,9 @@ export function tusUploadFile(opts: TusUploadOptions): Promise<string> {
       metadata: { filename: file, filetype: "application/octet-stream" },
       uploadSize: size,
       retryDelays: [0, 1000, 3000],
-      onSuccess({ lastResponse }) {
-        // The upload URL's final path segment is the session_id.
-        const uploadUrl = lastResponse.getHeader("location") ?? upload.url ?? "";
-        const sessionId = uploadUrl.split("/").pop() ?? "";
+      onSuccess() {
+        // upload.url is the canonical tus upload location set from the creation 201 Location.
+        const sessionId = (upload.url ?? "").split("/").pop() ?? "";
         if (!sessionId) {
           reject(new Error("tus upload succeeded but session_id could not be derived from upload URL"));
           return;

@@ -37,9 +37,13 @@ async function run(i: In, ctx: GalaxyContext): Promise<UploadFileResult> {
     throw new GalaxyConnectionError(`file not found: ${i.path}`, 400);
   }
 
+  if (!ctx.baseUrl || !ctx.apiKey) {
+    throw new GalaxyConnectionError("baseUrl and apiKey are required for file upload", 400);
+  }
+
   const file = basename(i.path);
-  const baseUrl = ctx.baseUrl ?? "";
-  const apiKey = ctx.apiKey ?? "";
+  const baseUrl = ctx.baseUrl;
+  const apiKey = ctx.apiKey;
 
   const sessionId = await tusUploadFile({ baseUrl, apiKey, path: i.path, signal: ctx.signal });
 

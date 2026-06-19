@@ -37,4 +37,5 @@ export { listUserToolsOp, listUserTools, type UserTool } from "./operations/list
 export { createUserToolOp, createUserTool, type CreatedUserTool } from "./operations/create-user-tool";
 export { deleteUserToolOp, deleteUserTool, type DeletedUserTool } from "./operations/delete-user-tool";
 export { runUserToolOp, runUserTool, type UserToolRun } from "./operations/run-user-tool";
+export { getToolInputTemplateOp, getToolInputTemplate, type ToolInputTemplateResult } from "./operations/get-tool-input-template";
 export type { IwcWorkflow, EnrichedIwcWorkflow } from "./iwc-manifest";

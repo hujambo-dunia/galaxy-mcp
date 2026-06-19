@@ -33,3 +33,4 @@ import "./list-user-tools";
 import "./create-user-tool";
 import "./delete-user-tool";
 import "./run-user-tool";
+import "./get-tool-input-template";

@@ -1,8 +1,9 @@
 // Note: /api/histories/{history_id}/contents/{dataset_id}/provenance is not in the typed API paths.
-// The provenance GET call casts ctx.client.GET to `any` -- intentional, localized to this file.
+// We route it through legacyGet, which handles the any-cast internally and throws typed errors.
 import { z } from "zod";
 import type { GalaxyContext } from "../context";
-import { classifyHttp } from "../errors";
+import { classifyHttp, GalaxyNotFoundError } from "../errors";
+import { legacyGet } from "../legacy";
 import { register } from "./registry";
 import type { AnyOperation, Operation } from "./types";
 
@@ -39,18 +40,22 @@ type In = { datasetId: string; historyId?: string };
 async function run(i: In, ctx: GalaxyContext): Promise<GetJobDetailsResult> {
   let jobId: string | undefined;
 
-  // Try provenance path if historyId supplied (cast to any: path not in typed API)
+  // Try provenance path if historyId supplied (off-schema; routed through legacyGet).
+  // 404 means the provenance record doesn't exist -- fall through to dataset lookup.
+  // Any other error (401/403/5xx) is a real problem and must surface to the caller.
   if (i.historyId) {
-    const { data, error, response } = await (ctx.client.GET as any)(
-      "/api/histories/{history_id}/contents/{dataset_id}/provenance",
-      { params: { path: { history_id: i.historyId, dataset_id: i.datasetId } } },
-    );
-    if (!error && data) {
-      jobId = (data as ProvenanceResponse).job_id;
-    } else if (response.status >= 500) {
-      throw classifyHttp(response.status, error);
+    try {
+      const prov = await legacyGet<ProvenanceResponse>(ctx, "/api/histories/{history_id}/contents/{dataset_id}/provenance", {
+        params: { path: { history_id: i.historyId, dataset_id: i.datasetId } },
+      });
+      jobId = prov.job_id;
+    } catch (err) {
+      if (!(err instanceof GalaxyNotFoundError)) {
+        throw err;
+      }
+      // 404: provenance not available, fall through to dataset creating_job path
     }
-    // non-fatal: fall through to dataset lookup if provenance didn't yield a job_id
+    // Also fall through if provenance returned 200 but had no job_id
   }
 
   // Fallback: read creating_job from dataset metadata

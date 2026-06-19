@@ -58,7 +58,9 @@ async function run(i: In, ctx: GalaxyContext): Promise<DownloadDatasetResult> {
     throw new GalaxyConnectionError(`dataset ${i.datasetId} not ready (state=${state})`, 409);
   }
 
-  // Fetch content via display endpoint (parseAs: "arrayBuffer" is not typed -- cast to any)
+  // Fetch content via display endpoint. legacyGet can't be used here because it doesn't support
+  // parseAs -- it always parses JSON. The cast to any is intentional and localized to this call.
+  // We still throw a typed error on failure so callers get the same error shape as everywhere else.
   const { data: rawData, error: dlError, response: dlResp } = await (ctx.client.GET as any)(
     "/api/datasets/{dataset_id}/display",
     { params: { path: { dataset_id: i.datasetId }, query: { to_ext: ext } }, parseAs: "arrayBuffer" },

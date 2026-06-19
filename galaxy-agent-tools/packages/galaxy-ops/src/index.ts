@@ -40,6 +40,7 @@ export { runUserToolOp, runUserTool, type UserToolRun } from "./operations/run-u
 export { getToolInputTemplateOp, getToolInputTemplate, type ToolInputTemplateResult } from "./operations/get-tool-input-template";
 export { getWorkflowInputTemplateOp, getWorkflowInputTemplate, resolveWorkflowSlots, type ResolvedSlots } from "./operations/get-workflow-input-template";
 export { invokeWorkflowOp, invokeWorkflow, getDatatypesMapping, type InvocationResult } from "./operations/invoke-workflow";
+export { uploadFileOp, uploadFile, type UploadFileResult } from "./operations/upload-file";
 export type { WorkflowInputTemplate, WorkflowSlot, WorkflowGuide, DatatypesMapping, ValidationReport } from "./workflow-inputs";
 export { validateInputs, subtypeSatisfies } from "./workflow-inputs";
 export type { IwcWorkflow, EnrichedIwcWorkflow } from "./iwc-manifest";

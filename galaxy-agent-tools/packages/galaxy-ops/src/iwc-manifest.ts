@@ -76,7 +76,7 @@ export async function fetchIwcWorkflows(): Promise<IwcWorkflow[]> {
 
   const resp = await globalThis.fetch(MANIFEST_URL);
   if (!resp.ok) throw new Error(`IWC manifest fetch failed: ${resp.status} ${resp.statusText}`);
-  const manifest: Array<{ workflows?: unknown[] }> = await resp.json();
+  const manifest = (await resp.json()) as Array<{ workflows?: unknown[] }>;
 
   const all: IwcWorkflow[] = [];
   for (const entry of manifest) {

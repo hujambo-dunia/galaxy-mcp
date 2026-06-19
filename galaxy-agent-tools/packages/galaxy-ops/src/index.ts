@@ -31,4 +31,5 @@ export { downloadDatasetOp, downloadDataset, type DownloadDatasetResult } from "
 export { getIwcWorkflowsOp, getIwcWorkflows } from "./operations/get-iwc-workflows";
 export { getIwcWorkflowDetailsOp, getIwcWorkflowDetails, type IwcWorkflowDetail } from "./operations/get-iwc-workflow-details";
 export { searchIwcWorkflowsOp, searchIwcWorkflows } from "./operations/search-iwc-workflows";
+export { importWorkflowFromIwcOp, importWorkflowFromIwc, type ImportedWorkflow } from "./operations/import-workflow-from-iwc";
 export type { IwcWorkflow, EnrichedIwcWorkflow } from "./iwc-manifest";

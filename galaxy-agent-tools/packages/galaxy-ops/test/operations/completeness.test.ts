@@ -18,6 +18,7 @@ const EXPECTED = [
   "get_iwc_workflows",
   "get_iwc_workflow_details",
   "search_iwc_workflows",
+  "import_workflow_from_iwc",
 ];
 
 describe("registry completeness", () => {

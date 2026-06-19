@@ -20,6 +20,7 @@ const EXPECTED = [
   "search_iwc_workflows",
   "recommend_iwc_workflows",
   "import_workflow_from_iwc",
+  "list_user_tools",
 ];
 
 describe("registry completeness", () => {

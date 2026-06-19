@@ -33,4 +33,5 @@ export { getIwcWorkflowDetailsOp, getIwcWorkflowDetails, type IwcWorkflowDetail 
 export { searchIwcWorkflowsOp, searchIwcWorkflows } from "./operations/search-iwc-workflows";
 export { recommendIwcWorkflowsOp, recommendIwcWorkflows } from "./operations/recommend-iwc-workflows";
 export { importWorkflowFromIwcOp, importWorkflowFromIwc, type ImportedWorkflow } from "./operations/import-workflow-from-iwc";
+export { listUserToolsOp, listUserTools, type UserTool } from "./operations/list-user-tools";
 export type { IwcWorkflow, EnrichedIwcWorkflow } from "./iwc-manifest";

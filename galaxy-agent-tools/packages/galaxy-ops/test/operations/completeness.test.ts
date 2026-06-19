@@ -26,6 +26,7 @@ const EXPECTED = [
   "run_user_tool",
   "get_tool_input_template",
   "get_workflow_input_template",
+  "invoke_workflow",
 ];
 
 describe("registry completeness", () => {

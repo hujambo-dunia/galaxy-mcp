@@ -1038,7 +1038,7 @@ wheels = [
 
 [[package]]
 name = "galaxy-mcp"
-version = "1.9.0.dev0"
+version = "1.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
@@ -1077,11 +1077,11 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.0.0,<5" },
     { name = "bioblend", specifier = ">=1.9.0,<2" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2.1" },
-    { name = "cryptography", specifier = ">=41.0.0,<49" },
+    { name = "cryptography", specifier = ">=41.0.0,<50" },
     { name = "fastmcp", specifier = ">=3.1.0,<4" },
     { name = "fastmcp", extras = ["code-mode"], marker = "extra == 'code-mode'", specifier = ">=3.1.0,<4" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0,<2" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0,<3" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.6.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.25.0" },

@@ -8,6 +8,7 @@ import pytest
 
 from galaxy_mcp.server import (
     _DATATYPES_MAPPING_CACHE,
+    _coerce_optional_json_dict,
     _get_datatypes_mapping,
     _resolve_workflow_slots,
     galaxy_state,
@@ -756,3 +757,30 @@ def test_template_returns_when_show_workflow_fails(mock_galaxy_instance):
     assert result.data["guide"]["provenance"]["version"] is None
     strand = next(s for s in result.data["slots"] if s["label"] == "Strandedness")
     assert strand["options"]
+
+
+class TestCoerceOptionalJsonDict:
+    """invoke_workflow accepts JSON-string inputs/params; coercion guards the edges."""
+
+    def test_json_object_string_becomes_dict(self):
+        assert _coerce_optional_json_dict('{"0": {"id": "abc", "src": "hda"}}', "inputs") == {
+            "0": {"id": "abc", "src": "hda"}
+        }
+
+    def test_dict_passes_through_unchanged(self):
+        d = {"0": {"id": "abc", "src": "hda"}}
+        assert _coerce_optional_json_dict(d, "inputs") is d
+
+    def test_none_and_blank_become_none(self):
+        assert _coerce_optional_json_dict(None, "inputs") is None
+        assert _coerce_optional_json_dict("", "params") is None
+        assert _coerce_optional_json_dict("   ", "params") is None
+
+    def test_non_dict_json_raises_named_error(self):
+        for bad in ("[]", "true", "123"):
+            with pytest.raises(ValueError, match="params must be a JSON object"):
+                _coerce_optional_json_dict(bad, "params")
+
+    def test_invalid_json_raises_named_error(self):
+        with pytest.raises(ValueError, match="inputs must be a JSON object"):
+            _coerce_optional_json_dict("{not valid json", "inputs")

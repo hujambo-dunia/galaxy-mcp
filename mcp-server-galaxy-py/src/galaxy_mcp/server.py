@@ -3036,6 +3036,35 @@ def _enrich_supplied_inputs(gi: GalaxyInstance, inputs: dict[str, Any]) -> dict[
     return enriched
 
 
+def _coerce_optional_json_dict(
+    value: dict[str, Any] | str | None, name: str
+) -> dict[str, Any] | None:
+    """Coerce an optional dict argument that may arrive as a JSON string.
+
+    Agents and some MCP clients pass nested arguments as a JSON string rather
+    than a real object. Accept that at the call boundary so downstream code sees
+    a dict: a blank string becomes None, a JSON object becomes a dict, and
+    anything else (invalid JSON, or JSON that isn't an object) raises a clear,
+    field-named error instead of failing obscurely deeper in.
+    """
+    if value is None or isinstance(value, dict):
+        return value
+    if not value.strip():
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"{name} must be a JSON object string or a dict, but got invalid JSON: {e}"
+        ) from e
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            f"{name} must be a JSON object (a mapping), but the string parsed to "
+            f"{type(parsed).__name__}."
+        )
+    return parsed
+
+
 @mcp.tool(tags={"workflows", "write", "extended"})
 def invoke_workflow(
     workflow_id: str,
@@ -3069,11 +3098,12 @@ def invoke_workflow(
     """
     state = ensure_connected()
 
+    inputs = _coerce_optional_json_dict(inputs, "inputs")
+    params = _coerce_optional_json_dict(params, "params")
+
     try:
         gi: GalaxyInstance = state["gi"]
 
-        inputs = json.loads(inputs) if isinstance(inputs, str) else inputs
-        params = json.loads(params) if isinstance(params, str) else params
         # Preflight: validate supplied inputs against the workflow's slots.
         if inputs:
             try:
